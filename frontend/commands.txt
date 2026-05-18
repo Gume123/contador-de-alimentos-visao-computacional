@@ -1,0 +1,2 @@
+instalar dependencias
+npm install react styled-components react-router-dom

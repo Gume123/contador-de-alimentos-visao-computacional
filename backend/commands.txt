@@ -1,0 +1,11 @@
+criar ambiente virtual
+venv\Scripts\activate
+
+instalar dependencias do backend:
+pip install fastapi uvicorn pydantic
+
+iniciar backend
+uvicorn main:app --reload
+
+rodar a câmera
+python identificador.py
