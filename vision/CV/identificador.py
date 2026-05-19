@@ -29,8 +29,7 @@ print("Iniciando câmera... Pressione 'q' para sair.")
 # =========================
 # CONFIG SERVIDOR
 # =========================
-
-URL_SERVIDOR = "http://localhost:3000/itens"
+URL_SERVIDOR = "http://127.0.0.1:8000/registrar-contagem/"
 
 # =========================
 # CALIBRAÇÃO DA PLATAFORMA
@@ -99,12 +98,12 @@ def enviar_para_servidor(item_completo):
         peso = partes[-1]
 
         nome_item = " ".join(partes[:-1])
-
         dados = {
-            "item": nome_item,
+            "equipa_id": 1,
+            "tipo_produto": nome_item,
             "peso": peso,
-            "quantidade": 1,
-            "timestamp": datetime.now().isoformat()
+            "contagem": 1,
+            "confianca": 1.0
         }
 
         resposta = requests.post(
@@ -130,8 +129,7 @@ def enviar_para_servidor(item_completo):
 def deletar_do_servidor(id_item):
 
     try:
-
-        url_delete = f"http://localhost:3000/itens/{id_item}"
+        url_delete = f"http://127.0.0.1:8000/registrar-contagem/{id_item}"
 
         resposta = requests.delete(url_delete)
 

@@ -5,7 +5,7 @@ import bcrypt
 from datetime import datetime
 from typing import List, Dict
 
-from model import ContagemItem, Usuario, UsuarioCadastro, UsuarioLogin
+from model import ContagemItem, ContagemItemResposta, EventoContagem, Usuario, UsuarioCadastro, UsuarioLogin
 from database import engine, Base, get_db
 
 Base.metadata.create_all(bind=engine)
@@ -20,29 +20,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-db_eventos =[] #Por enquanto vai ficar na memória, mas uma hora vai ter que subir para o postgre
-
+# A partir de agora, os eventos são salvos no SQLite via SQLAlchemy.
 #Endpoints
 
 @app.get("/")
 def home():
     return {"mensagem": "Bem-vindo à API de Contagem Inteligente de Alimentos!"}
 
-@app.post("/registrar-contagem/")
-async def registrar_contagem(item: ContagemItem):
+@app.get("/registrar-contagem/", response_model=List[ContagemItemResposta])
+async def listar_contagens(db: Session = Depends(get_db)):
+    eventos = db.query(EventoContagem).all()
+    return eventos
 
-    novo_evento = item.dict()
-    novo_evento["timestamp"] = datetime.now()
-
-    db_eventos.append(novo_evento)
+@app.post("/registrar-contagem/", response_model=ContagemItemResposta)
+async def registrar_contagem(item: ContagemItem, db: Session = Depends(get_db)):
+    novo_evento = EventoContagem(
+        equipa_id=item.equipa_id,
+        tipo_produto=item.tipo_produto,
+        peso=item.peso,
+        contagem=item.contagem,
+        confianca=item.confianca
+    )
+    db.add(novo_evento)
+    db.commit()
+    db.refresh(novo_evento)
 
     print(f"Recebido: {item.tipo_produto} (Confiança: {item.confianca}) da Equipe {item.equipa_id}")
 
-    return {
-        "status": "sucesso", 
-        "mensagem": "Contagem registrada", 
-        "data": novo_evento["timestamp"]
-     }
+    return novo_evento
+
+@app.delete("/registrar-contagem/{item_id}")
+async def deletar_contagem(item_id: int, db: Session = Depends(get_db)):
+    evento = db.query(EventoContagem).filter(EventoContagem.id == item_id).first()
+    if not evento:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    
+    db.delete(evento)
+    db.commit()
+    return {"status": "sucesso", "mensagem": f"Item {item_id} deletado com sucesso"}
 
 @app.post("/cadastro")
 def cadastrar_usuario(usuario: UsuarioCadastro, db: Session = Depends(get_db)):
@@ -56,7 +71,8 @@ def cadastrar_usuario(usuario: UsuarioCadastro, db: Session = Depends(get_db)):
         primeiro_nome=usuario.primeiro_nome,
         ultimo_nome=usuario.ultimo_nome,
         email=usuario.email, 
-        senha_hash=senha_hash
+        senha_hash=senha_hash,
+        equipa_id=usuario.equipa_id
     )
     db.add(novo_usuario)
     db.commit()
@@ -78,13 +94,14 @@ async def login(usuario_login: UsuarioLogin, db: Session = Depends(get_db)):
             "id": db_usuario.id,
             "primeiro_nome": db_usuario.primeiro_nome,
             "ultimo_nome": db_usuario.ultimo_nome,
-            "email": db_usuario.email
+            "email": db_usuario.email,
+            "equipa_id": db_usuario.equipa_id
         }
     }
 
 @app.get("/relatorio/equipe/{equipa_id}")
-async def obter_relatorio_equipe(equipa_id: int):
-    eventos_da_equipe = [e for e in db_eventos if e["equipa_id"] == equipa_id]
+async def obter_relatorio_equipe(equipa_id: int, db: Session = Depends(get_db)):
+    eventos_da_equipe = db.query(EventoContagem).filter(EventoContagem.equipa_id == equipa_id).all()
 
     if not eventos_da_equipe:
         return {"mensagem": f"Nenhum dado encontrado da equipe {equipa_id}", "totais": {}}
@@ -92,8 +109,8 @@ async def obter_relatorio_equipe(equipa_id: int):
     resumo = {}
 
     for ev in eventos_da_equipe:
-        tipo = ev["tipo_produto"]
-        resumo[tipo] = resumo.get(tipo, 0) + ev["contagem"]
+        tipo = ev.tipo_produto
+        resumo[tipo] = resumo.get(tipo, 0) + ev.contagem
 
     return {
         "equipa_id": equipa_id,
@@ -103,8 +120,9 @@ async def obter_relatorio_equipe(equipa_id: int):
     }
 
 @app.get("/eventos/todos/")
-async def ver_eventos():
+async def ver_eventos(db: Session = Depends(get_db)):
+    eventos = db.query(EventoContagem).all()
     return {
-        "total_registgros": len(db_eventos),
-        "dados": db_eventos
+        "total_registros": len(eventos),
+        "dados": eventos
     }

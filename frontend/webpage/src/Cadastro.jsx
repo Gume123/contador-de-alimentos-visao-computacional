@@ -216,6 +216,7 @@ function Cadastro() {
     const [UltimoNome, setUltimoNome] = useState('');
     const [Email, setEmail] = useState('');
     const [Senha, setSenha] = useState('');
+    const [EquipeId, setEquipeId] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -230,7 +231,8 @@ function Cadastro() {
                     primeiro_nome: PrimeiroNome,
                     ultimo_nome: UltimoNome,
                     email: Email,
-                    senha: Senha
+                    senha: Senha,
+                    equipa_id: EquipeId ? parseInt(EquipeId) : null
                 }),
             });
 
@@ -315,6 +317,17 @@ function Cadastro() {
                             value={Senha}
                             onChange={(e) => setSenha(e.target.value)}
                             required
+                        />
+                    </FieldGroup>
+
+                    <FieldGroup>
+                        <Label>ID da Equipe (Opcional)</Label>
+
+                        <Input
+                            type="number"
+                            placeholder="Digite o ID da sua equipe"
+                            value={EquipeId}
+                            onChange={(e) => setEquipeId(e.target.value)}
                         />
                     </FieldGroup>
 
