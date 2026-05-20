@@ -15,11 +15,12 @@ print("Classes do modelo:", modelo.names)
 # =========================
 # INICIAR CÂMERA
 # =========================
-camera = cv2.VideoCapture(0)
+camera = cv2.VideoCapture(0, cv2.CAP_MSMF)
 
-camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
+camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
+camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+camera
 if not camera.isOpened():
     print("Erro: não foi possível abrir a câmera.")
     exit()

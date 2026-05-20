@@ -14,7 +14,7 @@ app = FastAPI(title="LE - Contagem Inteligente de Alimentos")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["http://localhost:5173"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -98,6 +98,8 @@ async def login(usuario_login: UsuarioLogin, db: Session = Depends(get_db)):
             "equipa_id": db_usuario.equipa_id
         }
     }
+
+
 
 @app.get("/relatorio/equipe/{equipa_id}")
 async def obter_relatorio_equipe(equipa_id: int, db: Session = Depends(get_db)):
