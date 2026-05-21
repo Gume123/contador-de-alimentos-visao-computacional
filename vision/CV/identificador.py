@@ -1,5 +1,6 @@
 import cv2
 import math
+import time
 import numpy as np
 import requests
 from datetime import datetime
@@ -15,12 +16,11 @@ print("Classes do modelo:", modelo.names)
 # =========================
 # INICIAR CÂMERA
 # =========================
-camera = cv2.VideoCapture(0, cv2.CAP_MSMF)
+camera = cv2.VideoCapture(0)
 
-camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
-camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-camera
+camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
 if not camera.isOpened():
     print("Erro: não foi possível abrir a câmera.")
     exit()
@@ -38,10 +38,10 @@ URL_SERVIDOR = "http://127.0.0.1:8000/registrar-contagem/"
 
 # TROQUE PELOS PONTOS DO SEU CALIBRADOR
 pontos_imagem_pixel = np.array([
-    [203, 67],
-    [554, 61],
-    [583, 414],
-    [164, 399]
+    [120, 23],
+    [534, 17],
+    [582, 432],
+    [79, 432]
 ], dtype="float32")
 
 # Quadrado real de 30cm x 30cm
@@ -85,6 +85,9 @@ item_pendente = None
 
 historico_confirmados = []
 mensagem_feedback = ""
+
+# Lista de notificações ativas: [{"tipo": str, "texto": str, "timestamp": float}, ...]
+notificacoes = []
 
 # =========================
 # FUNÇÃO DE ENVIO
@@ -356,54 +359,68 @@ while True:
     # PAINEL VISUAL
     # =========================
 
-    altura_caixa = 250
+    # Filtra apenas itens confirmados (quantidade > 0)
+    itens_confirmados = {k: v for k, v in contagem_total.items() if v > 0}
+
+    linhas_lista = len(itens_confirmados)
+    altura_caixa = 45 + max(linhas_lista, 1) * 24 + 50
 
     cv2.rectangle(frame_anotado,
                   (10, 10),
-                  (500, altura_caixa),
+                  (460, altura_caixa),
                   (0, 0, 0),
                   -1)
 
     cv2.putText(frame_anotado,
                 "CONTAGEM TOTAL",
-                (20, 40),
+                (18, 34),
                 cv2.FONT_HERSHEY_COMPLEX,
-                0.9,
-                (0, 255, 255),
-                2)
+                0.6,
+                (0, 220, 220),
+                1)
 
-    y_pos = 80
+    y_pos = 58
 
-    for item, quantidade in contagem_total.items():
+    for item, quantidade in itens_confirmados.items():
 
         texto = f"{item}: {quantidade}"
 
         cv2.putText(frame_anotado,
                     texto,
-                    (20, y_pos),
+                    (18, y_pos),
                     cv2.FONT_HERSHEY_COMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2)
+                    0.5,
+                    (220, 220, 220),
+                    1)
 
-        y_pos += 30
+        y_pos += 24
 
-    # Estado atual
-    cv2.putText(frame_anotado,
-            "C=Confirmar | R=Rejeitar | U=Undo | Q=Sair",
-            (20, y_pos + 60),
-            cv2.FONT_HERSHEY_COMPLEX,
-            0.6,
-            (255, 255, 0),
-            2)
-    
+    if not itens_confirmados:
+        cv2.putText(frame_anotado,
+                    "Nenhum item confirmado",
+                    (18, y_pos),
+                    cv2.FONT_HERSHEY_COMPLEX,
+                    0.45,
+                    (140, 140, 140),
+                    1)
+        y_pos += 24
+
+    # Estado e atalhos
     cv2.putText(frame_anotado,
                 f"Estado: {estado}",
-                (20, y_pos + 20),
+                (18, y_pos + 10),
                 cv2.FONT_HERSHEY_COMPLEX,
-                0.7,
-                (0, 255, 0),
-                2)
+                0.45,
+                (0, 210, 0),
+                1)
+
+    cv2.putText(frame_anotado,
+                "C=Confirmar  R=Rejeitar  U=Undo  Q=Sair",
+                (18, y_pos + 30),
+                cv2.FONT_HERSHEY_COMPLEX,
+                0.38,
+                (180, 180, 0),
+                1)
 
     # =========================
     # ITEM PENDENTE
@@ -411,67 +428,124 @@ while True:
 
     if item_pendente is not None:
 
+        frame_w = frame_anotado.shape[1]
+
+        # Caixa compacta no canto superior direito
+        box_w = 420
+        box_x = frame_w - box_w - 10
+        box_y1 = 10
+        box_y2 = 80
+
+        # Fundo escuro
         cv2.rectangle(
             frame_anotado,
-            (600, 20),
-            (1200, 140),
-            (0, 0, 0),
+            (box_x, box_y1),
+            (frame_w - 10, box_y2),
+            (15, 15, 15),
             -1
         )
-
-        cv2.putText(
+        # Borda ciano fina
+        cv2.rectangle(
             frame_anotado,
-            "ITEM PENDENTE",
-            (620, 60),
-            cv2.FONT_HERSHEY_COMPLEX,
-            0.9,
-            (0, 255, 255),
-            2
+            (box_x, box_y1),
+            (frame_w - 10, box_y2),
+            (200, 200, 0),
+            1
         )
 
+        # Título pequeno
+        cv2.putText(
+            frame_anotado,
+            "PENDENTE:",
+            (box_x + 10, box_y1 + 25),
+            cv2.FONT_HERSHEY_COMPLEX,
+            0.45,
+            (0, 210, 210),
+            1
+        )
+
+        # Nome do item
         cv2.putText(
             frame_anotado,
             item_pendente,
-            (620, 100),
+            (box_x + 130, box_y1 + 25),
             cv2.FONT_HERSHEY_COMPLEX,
-            0.8,
+            0.48,
             (255, 255, 255),
-            2
+            1
         )
 
+        # Atalhos
         cv2.putText(
             frame_anotado,
-            "C = Confirmar | R = Rejeitar",
-            (620, 130),
+            "C=Confirmar  R=Rejeitar",
+            (box_x + 10, box_y1 + 55),
             cv2.FONT_HERSHEY_COMPLEX,
-            0.7,
-            (0, 255, 0),
-            2
+            0.38,
+            (0, 190, 80),
+            1
         )
 
     # =========================
-    # FEEDBACK VISUAL
+    # NOTIFICAÇÕES VISUAIS COM FADE (canto inferior esquerdo)
     # =========================
 
-    if mensagem_feedback != "":
+    tempo_atual = time.time()
+    # Filtrar notificações ativas (máximo 4 segundos de duração)
+    notificacoes = [n for n in notificacoes if tempo_atual - n["timestamp"] < 4.0]
 
-        cv2.rectangle(
-            frame_anotado,
-            (600, 160),
-            (1200, 220),
-            (0, 0, 0),
-            -1
-        )
+    frame_h = frame_anotado.shape[0]  # altura do frame (720)
+    spacing = 34
+    box_h = 28
 
-        cv2.putText(
-            frame_anotado,
-            mensagem_feedback,
-            (620, 200),
-            cv2.FONT_HERSHEY_COMPLEX,
-            0.8,
-            (0, 0, 255),
-            2
-        )
+    # Desenhar da mais nova (na base) para a mais antiga (subindo)
+    for i, n in enumerate(reversed(notificacoes)):
+        elapsed = tempo_atual - n["timestamp"]
+        
+        # Efeito de fade out no último segundo
+        if elapsed < 3.0:
+            alpha = 1.0
+        else:
+            alpha = max(0.0, 1.0 - (elapsed - 3.0) / 1.0)
+
+        if n["tipo"] == "adicionado":
+            cor_borda = (0, 200, 80)
+            cor_texto = (180, 255, 200)
+            icone     = "[+]"
+        else:
+            cor_borda = (0, 140, 255)
+            cor_texto = (180, 210, 255)
+            icone     = "[U]"
+
+        linha = f"{icone} {n['texto']}"
+
+        # Coordenadas da caixa da notificação
+        y2 = (frame_h - 12) - i * spacing
+        y1 = y2 - box_h
+        x1, x2 = 10, 500
+
+        # Garantir limites da imagem
+        if y1 >= 0 and y2 <= frame_h:
+            # Criar um sub-frame temporário para fazer o blending (fade suave)
+            sub_img = frame_anotado[y1:y2, x1:x2].copy()
+            
+            # Desenhar fundo escuro
+            cv2.rectangle(sub_img, (0, 0), (x2 - x1, box_h), (20, 20, 20), -1)
+            # Desenhar borda fina
+            cv2.rectangle(sub_img, (0, 0), (x2 - x1, box_h), cor_borda, 1)
+            # Desenhar texto
+            cv2.putText(
+                sub_img,
+                linha,
+                (8, 20),
+                cv2.FONT_HERSHEY_COMPLEX,
+                0.48,
+                cor_texto,
+                1
+            )
+            
+            # Blending com o frame original baseado no alpha
+            cv2.addWeighted(sub_img, alpha, frame_anotado[y1:y2, x1:x2], 1.0 - alpha, 0, dst=frame_anotado[y1:y2, x1:x2])
 
     # =========================
     # EXIBIR TELA
@@ -505,11 +579,14 @@ while True:
 
             print(f"ITEM CONFIRMADO: {item_pendente}")
 
+            notificacoes.append({
+                "tipo": "adicionado",
+                "texto": f"+ {item_pendente}",
+                "timestamp": time.time()
+            })
+
             item_pendente = None
 
-    # =========================
-    # REJEITAR ITEM
-    # =========================
     elif tecla == ord('r'):
 
         if item_pendente is not None:
@@ -517,10 +594,13 @@ while True:
             print(f"ITEM REJEITADO: {item_pendente}")
 
             item_pendente = None
+            
+            # Reiniciar estado e timers para nova identificação imediata
+            estado = "SEM_OBJETO"
+            frames_estaveis = 0
+            frames_sem_objeto = 0
+            item_atual = None
 
-    # =========================
-    # UNDO ÚLTIMO ITEM
-    # =========================
     elif tecla == ord('u'):
 
         if len(historico_confirmados) > 0:
@@ -535,10 +615,6 @@ while True:
             else:
 
                 ultimo_item = ultimo["nome"]
-                id_item = ultimo["id"]
-
-                ultimo_item = ultimo["nome"]
-
                 id_item = ultimo["id"]
 
             # Remove da contagem
@@ -556,11 +632,23 @@ while True:
 
             mensagem_feedback = f"UNDO: {ultimo_item}"
 
+            notificacoes.append({
+                "tipo": "undo",
+                "texto": f"Desfeito: {ultimo_item}",
+                "timestamp": time.time()
+            })
+
             print(f"UNDO REALIZADO: {ultimo_item}")
 
         else:
 
             mensagem_feedback = "Nada para desfazer"
+
+            notificacoes.append({
+                "tipo": "undo",
+                "texto": "Nada para desfazer",
+                "timestamp": time.time()
+            })
 
     # =========================
     # FECHAR
