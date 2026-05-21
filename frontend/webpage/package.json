@@ -21,6 +21,7 @@
     "react-router-dom": "^7.15.1",
     "styled-components": "^6.4.2",
     "tslib": "^2.8.1",
+    "vite-react-starter": "^0.0.0",
     "yup": "^1.7.1"
   },
   "devDependencies": {
